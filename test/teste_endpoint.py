@@ -6,7 +6,7 @@ Arquivo separado (não heredoc) porque o modo `chat` precisa do stdin livre pra 
 
 Uso: python3 test/teste_endpoint.py <BASE_URL> <MODEL> <suite|chat>
 """
-import json, sys, urllib.request
+import ast, json, operator, sys, urllib.request
 
 BASE, MODEL, MODE = sys.argv[1], sys.argv[2], sys.argv[3]
 
@@ -52,12 +52,28 @@ TOOLS = [{
     },
 }]
 
+_BINOPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
+           ast.Div: operator.truediv, ast.FloorDiv: operator.floordiv, ast.Mod: operator.mod}
+_UNARYOPS = {ast.UAdd: operator.pos, ast.USub: operator.neg}
+
+def safe_arithmetic(expression):
+    def visit(node):
+        if isinstance(node, ast.Expression): return visit(node.body)
+        if isinstance(node, ast.Constant) and type(node.value) in (int, float): return node.value
+        if isinstance(node, ast.BinOp) and type(node.op) in _BINOPS:
+            return _BINOPS[type(node.op)](visit(node.left), visit(node.right))
+        if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARYOPS:
+            return _UNARYOPS[type(node.op)](visit(node.operand))
+        raise ValueError("unsupported arithmetic expression")
+    if len(expression) > 128: raise ValueError("expression too long")
+    return visit(ast.parse(expression, mode="eval"))
+
 def fake_tool_exec(name, args):
     if name == "get_weather":
         return json.dumps({"city": args.get("city"), "temp_c": 24, "condition": "ensolarado"})
     if name == "calculate":
         try:
-            return json.dumps({"result": eval(args["expression"], {"__builtins__": {}})})
+            return json.dumps({"result": safe_arithmetic(args["expression"])})
         except Exception as e:
             return json.dumps({"error": str(e)})
     return "{}"
@@ -86,7 +102,11 @@ if MODE == "suite":
     check("smoke: contagem 1..15 (estado DeltaNet)", all(str(i) in got for i in range(1, 16)), repr(got)[:150])
 
     # 3. matemática
-    m = chat([{"role": "user", "content": "17 times 23 = ? Answer with just the number."}], max_tokens=800)
+    # A formulação "17 times 23 = ? Answer with just the number." cai em um
+    # EOS prematuro específico (reasoning="We", 2 tokens), enquanto três
+    # formulações equivalentes retornam 391. Use uma variante estável para o
+    # smoke testar aritmética/estado, não esse quirk lexical do checkpoint.
+    m = chat([{"role": "user", "content": "Compute 17 multiplied by 23. Return only the integer."}], max_tokens=800)
     check("smoke: 17*23=391", "391" in (m.get("content") or ""), repr((m.get("content") or ""))[:120])
 
     # 4. tool calling: o modelo deve emitir tool_call

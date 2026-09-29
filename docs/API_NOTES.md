@@ -89,7 +89,8 @@ não usar):
 eps = 1e-30   # = 0 em bf16, mas impede constant folding
 torch.full((...), eps, dtype=..., device="cpu")   # em vez de torch.zeros
 ```
-Aplicar nos DOIS buffers ao portar. (Upstream: private-vllm-neuron PR #2104, commit 8d7e2109.)
+Aplicar nos DOIS buffers ao portar. A técnica evita que buffers all-zero sejam
+constant-folded e deve ser validada com teste de estado entre passos de decode.
 
 ## Flags de serve que funcionam no público (do gemma4 launch_serve_public.sh)
 

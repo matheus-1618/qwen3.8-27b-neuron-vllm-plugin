@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+# Modified from: Modified from the attributed kernel integration to support resumable segmented prefill.
 """NKI kernels for Qwen3.5 — Phase 4.
 
 PR #152's kernel is exported in **two forms** so callers can pick:
@@ -12,9 +13,9 @@ PR #152's kernel is exported in **two forms** so callers can pick:
   proper torch HOP that survives `torch.compile` graph extraction.
   Use this from inside `Qwen38DeltaNetAttention.forward()`.
 
-The PR #152 source itself (`deltanet_fused.py`) is unchanged — we
-just removed the `@nki.jit` decorator from its function body so we
-can compile it ourselves with the right backend.
+The local `deltanet_fused.py` is adapted from PR #152. It removes the direct
+JIT decorator and adds resumable `initial_state` input plus final-state output
+for segmented prefill. See NOTICE for the pinned source and modification scope.
 """
 
 import nki
@@ -51,7 +52,7 @@ def call_deltanet_fused(
     wrapped = wrap_nki(deltanet_fused_chunked_fwd_jit)
     # The [grid](**kwargs) syntax is the vllm_neuron convention. We pass
     # positionally because PR #152's kernel takes positional args (matches
-    # the NxDI call site verbatim).
+    # matching the NxDI call signature).
     return wrapped[grid](
         query, key, value, g_in, beta_in, lower_mask, identity, lower_mask_diag,
         initial_state,

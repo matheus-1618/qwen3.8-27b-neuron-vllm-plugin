@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Diagnóstico de latência: cronometra prompts e mostra quanto do custo é reasoning.
 
 Uso: python3 test/diag_latencia.py [BASE] [MODEL]

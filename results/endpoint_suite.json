@@ -1,0 +1,21 @@
+{
+  "date": "2026-09-29",
+  "configuration": {
+    "instance_envelope": "trn2.3xlarge",
+    "tensor_parallel_size": 4,
+    "max_model_len": 12288,
+    "max_num_seqs": 4,
+    "weights": "bfloat16",
+    "kv_cache": "bfloat16",
+    "kv_cap_fraction": 0.05
+  },
+  "summary": {"passed": 5, "failed": 0},
+  "tests": [
+    {"name": "factual response", "passed": true},
+    {"name": "DeltaNet recurrent-state sequence", "passed": true},
+    {"name": "arithmetic response", "passed": true},
+    {"name": "tool-call emission", "passed": true},
+    {"name": "tool-result final response", "passed": true}
+  ],
+  "privacy": "Prompts and response content are omitted; the endpoint test source defines the public synthetic cases."
+}

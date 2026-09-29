@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
 # [CONTAINER] Fase 2: instala o pacote qwen38 no plugin público vLLM-Neuron.
 # Copia serving_pkg/qwen38 -> vllm_neuron/model/qwen38 e registra a arquitetura
 # Qwen3_5ForConditionalGeneration em vllm_neuron/model/registry.py.
 # Idempotente; backup do registry.py na primeira execução.
-# Padrão: <internal reference port: gemma4-31b>
+# Baseado no padrão de registro do plugin público vLLM-Neuron.
 # Uso (dentro do container): bash 03_install_plugin.sh
 set -eu
 HERE="$(cd "$(dirname "$0")/.." && pwd)"   # raiz do qwen38-27b-trn2
 
 if [ ! -f "$HERE/serving_pkg/qwen38/__init__.py" ]; then
-  echo "ERRO: serving_pkg/qwen38 ainda não existe (Fase 2 do PLANO.md)." >&2
+  echo "ERRO: serving_pkg/qwen38 não encontrado neste checkout." >&2
   exit 1
 fi
 

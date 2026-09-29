@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
 # [CONTAINER] Fases 3-4: sobe o vllm serve do Qwen3.8-27B na trn2.3xlarge (TP=4).
 # Primeiro boot compila (potencialmente horas na 3xl/12vCPU; NEFF cache torna
 # restarts rápidos). Padrão de flags: gemma4 PublicVLLM launch_serve_public.sh.
@@ -25,7 +26,7 @@ GREEDY="${GREEDY:-1}"
 # SEGURANÇA: bind em LOOPBACK por padrão. A instância tem IP público e a API não
 # tem autenticação — nunca exponha em 0.0.0.0. Acesso pretendido:
 #   - de dentro do container (network host → localhost funciona)
-#   - do laptop via túnel SSH-over-SSM (scripts/chat.sh) que conecta em 127.0.0.1
+#   - do laptop via um túnel SSH que conecta em 127.0.0.1
 # Só mude com HOST=... se souber exatamente o que está fazendo.
 HOST="${HOST:-127.0.0.1}"
 # Fração da HBM que o vLLM pode usar (pesos + KV cache). O budget de KV é
@@ -41,10 +42,26 @@ HOST="${HOST:-127.0.0.1}"
 #   GMU=0.8 + MNS=1  -> nem sobe: "KV cache budget below minimum" (KV=0.00 GiB),
 #                       o uso não-KV (pesos + constantes + estado + scratch) já
 #                       passa de 19.2GB, então 0.8 não deixa nada pro KV.
-# Ou seja: nesta caixa a janela é estreita. 0.9/MNS=1 é o ponto comprovado.
-# Para concorrência real, o caminho é mais chips (TP maior) ou FP8, não mexer aqui.
+# Com o cap KV padrão, GMU=0.9/MNS=1 é o ponto conservador comprovado.
+# Para 12K/MNS4, dimensione explicitamente KV_CAP; o valor 0.05 foi validado
+# para 4×12.288 tokens e libera scratch sem mudar a precisão BF16.
 GMU="${GMU:-0.9}"
-LOG="/root/serve_qwen38_len${MAX_LEN}_tp${TP}.log"
+# Cap do orçamento KV como fração do budget HBM já escalado por GMU.
+# Default do plugin = 0.30. Para Qwen híbrido, KV muito acima do necessário
+# reduz a HBM disponível aos buffers/scratch do DeltaNet em MNS>1.
+# KV_CAP=0.05 limita KV a ~1.08 GiB (~70K tokens BF16/rank), ainda acima dos
+# 49.152 tokens de pior caso e libera ~5.4 GiB frente ao default.
+KV_CAP="${KV_CAP:-0.30}"
+RUN_TAG="${RUN_TAG:-}"
+python3 - "$GMU" "$KV_CAP" <<'PY'
+import sys
+for name, raw in zip(("GMU", "KV_CAP"), sys.argv[1:]):
+    value = float(raw)
+    if not 0 < value <= 1:
+        raise SystemExit(f"{name} deve estar em (0,1], recebido {raw}")
+PY
+LOG_SUFFIX="${RUN_TAG:+_${RUN_TAG}}"
+LOG="/root/serve_qwen38_len${MAX_LEN}_tp${TP}${LOG_SUFFIX}.log"
 
 # Patches de timeout p/ compile longo (lição do qwen3.5: default 30min é curto).
 PYSITE="$(python3 -c 'import torch, os; print(os.path.dirname(os.path.dirname(torch.__file__)))')"
@@ -59,6 +76,7 @@ export VLLM_CACHE_ROOT="${VLLM_CACHE_ROOT:-/root/neff_cache}"
 export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS="${VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS:-21600}"
 export VLLM_ENGINE_ITERATION_TIMEOUT_S="${VLLM_ENGINE_ITERATION_TIMEOUT_S:-21600}"
 export VLLM_RPC_TIMEOUT="${VLLM_RPC_TIMEOUT:-21600000}"
+export VLLM_NEURON_KV_GMU_BUDGET_CAP_FRACTION="$KV_CAP"
 
 if [ "$GREEDY" = "1" ]; then
   ADD="{\"neuron_config\":{\"num_batched_tokens_buckets\":[${BUCKETS}],\"num_seqs_buckets\":[${MNS}],\"on_device_sampling_config\":{\"all_greedy\":true}}}"
@@ -74,8 +92,10 @@ if [ -n "${KV_SEG:-}" ]; then
   ADD="$(echo "$ADD" | sed "s/\"num_batched_tokens_buckets\"/\"kv_segment_size_buckets\":[${KV_SEG}],\"num_batched_tokens_buckets\"/")"
 fi
 
-echo "[serve] MODEL=$MODEL TP=$TP MAX_LEN=$MAX_LEN SEG=$SEG BUCKETS=[$BUCKETS] MNS=$MNS GMU=$GMU GREEDY=$GREEDY BIND=$HOST:$PORT"
+echo "[serve] MODEL=$MODEL TP=$TP MAX_LEN=$MAX_LEN SEG=$SEG BUCKETS=[$BUCKETS] MNS=$MNS GMU=$GMU KV_CAP=$KV_CAP GREEDY=$GREEDY BIND=$HOST:$PORT"
 echo "[serve] log: $LOG"
+# Cada RUN_TAG representa um experimento; não misture falhas antigas no parser.
+: > "$LOG"
 
 pkill -9 -f "vllm serve" 2>/dev/null || true
 pkill -9 -f EngineCore 2>/dev/null || true

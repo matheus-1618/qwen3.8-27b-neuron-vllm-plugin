@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+# Modified from: Modified from the attributed Qwen3.6 public example for Qwen3.8 registration.
 """Factory for Qwen3.8-27B hybrid model selection based on platform/config.
 
 Mirrors `vllm_neuron.model.qwen3_moe.factory`. Only supports BF16 today;

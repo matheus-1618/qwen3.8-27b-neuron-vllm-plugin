@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
 # [CONTAINER] Fase 4: benchmark de performance com `vllm bench serve` (harness oficial do vLLM).
 #
 # Mede TTFT, TPOT, ITL, E2E e throughput com dataset sintético, varrendo concorrência.
@@ -19,8 +20,8 @@
 #
 # ATENÇÃO: o servidor precisa ter `--max-num-seqs` >= a concorrência testada, senão
 # os requests apenas enfileiram e o resultado mede fila, não paralelismo. O default
-# do 04_serve.sh é MNS=1 → para testar concorrência real, suba o serve com
-# `MNS=8 MAX_LEN=4096 bash 04_serve.sh` antes.
+# do 04_serve.sh é MNS=1. Para o envelope 12K/MNS4 validado, use a configuração
+# completa de docs/LONG_CONTEXT_TRN2_3XL.md; não aumente MNS sem redimensionar KV.
 set -euo pipefail
 
 BASE="${BASE:-http://localhost:8000}"
@@ -42,7 +43,7 @@ MAXC="$(echo "$CONC" | tr ' ' '\n' | sort -n | tail -1)"
 if [ "$MNS_SRV" != "?" ] && [ "$MNS_SRV" -lt "$MAXC" ] 2>/dev/null; then
   echo "AVISO: servidor com --max-num-seqs=$MNS_SRV < concorrência máxima $MAXC."
   echo "       Os pontos acima de $MNS_SRV medem ENFILEIRAMENTO, não paralelismo."
-  echo "       Para paralelismo real: MNS=$MAXC MAX_LEN=4096 bash 04_serve.sh"
+  echo "       Redimensione MNS/KV conforme docs/LONG_CONTEXT_TRN2_3XL.md."
   echo
 fi
 
@@ -55,6 +56,9 @@ for c in $CONC; do
   n="${PROMPTS:-$(( c * 3 < 4 ? 4 : c * 3 ))}"
   fname="perf_in${IN}_out${OUT}_c${c}.json"
   echo "=== concorrência $c ($n requests) ==="
+  rm -f "$RESULT_DIR/$fname"
+  runlog="$RESULT_DIR/${fname%.json}.stdout.log"
+  set +e
   vllm bench serve \
     --backend openai-chat \
     --endpoint /v1/chat/completions \
@@ -69,7 +73,14 @@ for c in $CONC; do
     --ignore-eos \
     --percentile-metrics ttft,tpot,itl,e2el \
     --save-result --result-dir "$RESULT_DIR" --result-filename "$fname" \
-    2>&1 | grep -E "Successful|Benchmark duration|Request throughput|Output token throughput|Total Token throughput|Mean TTFT|Median TTFT|P99 TTFT|Mean TPOT|Median TPOT|Mean ITL|Mean E2EL|Median E2EL" || true
+    2>&1 | tee "$runlog" | grep -E "Successful|Benchmark duration|Request throughput|Output token throughput|Total Token throughput|Mean TTFT|Median TTFT|P99 TTFT|Mean TPOT|Median TPOT|Mean ITL|Mean E2EL|Median E2EL"
+  bench_rc=${PIPESTATUS[0]}
+  set -e
+  if [[ "$bench_rc" -ne 0 || ! -s "$RESULT_DIR/$fname" ]]; then
+    echo "ERRO: benchmark c=$c falhou (rc=$bench_rc); veja $runlog" >&2
+    [[ "$bench_rc" -ne 0 ]] && exit "$bench_rc"
+    exit 1
+  fi
   echo
 done
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
 # [INSTÂNCIA] Fase 0: baixa Qwen/Qwen3.8-27B (~54GB, público, sem token) pra ~/models.
 # Roda no HOST (venv própria) pra poder rodar em paralelo com o docker pull.
 # MODEL_ID=Qwen/Qwen3.8-27B-FP8 pra variante FP8 (fase 5).
@@ -31,7 +32,7 @@ echo "[download] S3 vazio ou sem acesso — seguindo pela HF (lento)"
 
 echo "=== [1/2] venv + huggingface_hub ==="
 python3 -m venv ~/.hfvenv 2>/dev/null || true
-~/.hfvenv/bin/pip install -q --upgrade "huggingface_hub[hf_transfer]"
+~/.hfvenv/bin/pip install -q "huggingface_hub[hf_transfer]==0.36.0"
 
 echo "=== [2/2] Download $MODEL_ID -> $DEST ==="
 mkdir -p "$DEST"

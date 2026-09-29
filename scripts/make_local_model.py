@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 # [CONTAINER] Fase 3: monta um model dir TEXT-ONLY do Qwen3.8-27B para o plugin público.
 #
 # Por quê (mesmo padrão do gemma4 PublicVLLM):
