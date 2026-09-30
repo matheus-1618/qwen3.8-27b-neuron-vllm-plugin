@@ -21,7 +21,7 @@
 # ATENÇÃO: o servidor precisa ter `--max-num-seqs` >= a concorrência testada, senão
 # os requests apenas enfileiram e o resultado mede fila, não paralelismo. O default
 # do 04_serve.sh é MNS=1. Para o envelope 12K/MNS4 validado, use a configuração
-# completa de docs/LONG_CONTEXT_TRN2_3XL.md; não aumente MNS sem redimensionar KV.
+# completa de LEARNINGS.md; não aumente MNS sem redimensionar KV.
 set -euo pipefail
 
 BASE="${BASE:-http://localhost:8000}"
@@ -43,7 +43,7 @@ MAXC="$(echo "$CONC" | tr ' ' '\n' | sort -n | tail -1)"
 if [ "$MNS_SRV" != "?" ] && [ "$MNS_SRV" -lt "$MAXC" ] 2>/dev/null; then
   echo "AVISO: servidor com --max-num-seqs=$MNS_SRV < concorrência máxima $MAXC."
   echo "       Os pontos acima de $MNS_SRV medem ENFILEIRAMENTO, não paralelismo."
-  echo "       Redimensione MNS/KV conforme docs/LONG_CONTEXT_TRN2_3XL.md."
+  echo "       Redimensione MNS/KV conforme LEARNINGS.md."
   echo
 fi
 
