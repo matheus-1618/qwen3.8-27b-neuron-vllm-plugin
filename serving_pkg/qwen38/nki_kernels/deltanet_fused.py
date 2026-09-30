@@ -1,19 +1,19 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
+# Modified from: Modified from NxDI PR #152: resumable initial/final state and wrapper integration.
 
 # ===========================================================================
-# This file is taken VERBATIM from aws-neuron/neuronx-distributed-inference
-# pull request #152 (Qwen3.5 contrib), file:
+# This file is ADAPTED from aws-neuron/neuronx-distributed-inference
+# pull request #152 (Qwen3.5 contribution), file:
 #     contrib/models/Qwen3.5-4B/src/nki_kernels/nki_deltanet_fused.py
 #
 # Author: m-deepankar-singh (built on Jim Burtoft's PR #140/#141 contrib work)
 # Validated: cosine 0.9998-0.9999 vs CPU reference, top-1 match 16/16
 # Tested on: trn2.48xlarge, NKI 0.3.0 / SDK 2.29+, TP=4, BF16
 #
-# Phase 4 contract: keep this kernel verbatim. Wrap it from
-#     qwen38.model_bf16.Qwen38DeltaNetAttention.
-# When NKI ABI shifts between vllm_neuron and NxDI, fix the wrapper —
-# not this file.
+# Local modifications: removed the direct @nki.jit decorator, added an
+# `initial_state` input and final-state output for segmented/resumable prefill,
+# and integrated the kernel with the vLLM-Neuron wrapper. See NOTICE.
 #
 # Original docstring follows.
 # ===========================================================================

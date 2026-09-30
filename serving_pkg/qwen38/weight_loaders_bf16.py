@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+# Modified from: Modified from the attributed Qwen3.6 public example for Qwen3.8 checkpoint mappings.
 """Weight loaders for Qwen3.8 BF16 checkpoint format — Phase 6.
 
 Provides `build_weight_mappings(config)` which returns a dict mapping
@@ -17,17 +18,17 @@ HuggingFace checkpoint layout for Qwen3.8-27B
     model.norm.weight               [hidden]
     (lm_head shares embed_tokens via tie_word_embeddings)
 
-  Per layer L (0..31):
+  Per layer L (0..63):
     Pre-attention norms:
       model.layers.{L}.input_layernorm.weight              [hidden]
       model.layers.{L}.post_attention_layernorm.weight     [hidden]
 
-    MLP (all 32 layers):
+    MLP (all 64 layers):
       model.layers.{L}.mlp.gate_proj.weight   [intermediate, hidden]
       model.layers.{L}.mlp.up_proj.weight     [intermediate, hidden]
       model.layers.{L}.mlp.down_proj.weight   [hidden, intermediate]
 
-    GQA full-attention layers (L in [3, 7, 11, 15, 19, 23, 27, 31]):
+    GQA full-attention layers (every fourth layer, L % 4 == 3):
       model.layers.{L}.self_attn.q_proj.weight        [Q*head_dim, hidden]
       model.layers.{L}.self_attn.k_proj.weight        [KV*head_dim, hidden]
       model.layers.{L}.self_attn.v_proj.weight        [KV*head_dim, hidden]

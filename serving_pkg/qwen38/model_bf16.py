@@ -1,13 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
+# Modified from: Modified from attributed public Qwen/vLLM-Neuron examples; adds Qwen3.8 sharding and state handling.
 """Qwen3.8 hybrid (DeltaNet + GQA) model — BF16 implementation.
 
-Layer pattern (32 total): [3 DeltaNet + 1 GQA] x 8
+Layer pattern (64 total): [3 DeltaNet + 1 GQA] x 16
 
 status (this file):
 - ✅ RMSNorm, Partial RoPE, full-attention (GQA) layers wired with NF.*
-- ✅ Dense SwiGLU MLP with NF.mlp (all 32 layers, TP-sharded intermediate)
-- ✅ DeltaNet linear-attention layer (24 layers) — wraps PR #152's
-     fused NKI kernel verbatim (kept in `nki_kernels/deltanet_fused.py`)
+- ✅ Dense SwiGLU MLP with NF.mlp (all 64 layers, TP-sharded intermediate)
+- ✅ DeltaNet linear-attention layer (48 layers) — adapts the NKI kernel in
+     `nki_kernels/deltanet_fused.py` with resumable initial/final state
 - ✅ DeltaNet TP+SP — v/k heads sharded across TP ranks (12 v + 4 k por
      rank @ TP=4); prefill all_gather→reduce_scatter, decode all_reduce
 - 🟡 DeltaNet decode path — Phase 5 (single-step recurrent update)
@@ -15,10 +16,12 @@ status (this file):
 - ✅ Model + ForCausalLM follow qwen3_moe template (vocab-sharded
      embedding, sequence parallelism, lm_head)
 
-This file mirrors `_reference/qwen3_moe_model_bf16.py` for the GQA layer,
-`_reference/llama3/model.py` for the dense MLP, and PR #152's
-`_reference/pr152/src/modeling_qwen35.py` for the DeltaNet pipeline.
-Differences flagged with `# `.
+Public references:
+- vLLM-Neuron model implementations: https://github.com/vllm-project/vllm-neuron
+- DeltaNet kernel origin: https://github.com/aws-neuron/neuronx-distributed-inference/pull/152
+- Qwen3.6 Trainium example: https://github.com/arminagha1234/Armin-Neuron/tree/fc1af21a8620c97e6f0d67f48f89a8388a569808/qwen3.6-27b-trainium
+
+This file adapts those interfaces for Qwen3.8; see NOTICE for provenance.
 """
 
 import logging
@@ -300,7 +303,7 @@ class Qwen38RotaryEmbedding(nn.Module):
 
 
 # ============================================================================
-# Section 3: Full-Attention (GQA) Layer  -- the 8 of 32 layers
+# Section 3: Full-Attention (GQA) Layer  -- 16 of 64 layers
 # Mirrors qwen3_moe Qwen3MoeAttention almost exactly. Differences:
 #   - Partial RoPE (only first `rotary_dim` of head_dim)
 #   - `attn_output_gate` flag (Qwen3.8 has a sigmoid gate on attn output)
@@ -783,8 +786,7 @@ class Qwen38GQAAttention(nn.Module):
         #       multiple requests share the K/V tensor.
         #   (b) NF.attention_decode (which DOES take a mask) requires
         #       head_dim <= 128 — we have head_dim=256.
-        # The compiler still fuses this chain into a single NEFF on the
-        # tensor engine. At customer's 20K-in / 1-out shape the decode
+        # For a long-input/single-output serving shape, the decode
         # matmul is ~0.4 GFLOP/layer — small, not the bottleneck.
 
         # 7) Path E: Gemma4-style split-K + split-V flash attention for head_dim=256.
@@ -876,9 +878,8 @@ class Qwen38GQAAttention(nn.Module):
 
 # ============================================================================
 # Section 4: DeltaNet (linear attention) Layer
-# Wraps the validated PR #152 fused NKI kernel with a vllm_neuron-style
-# nn.Module. The kernel itself is in `nki_kernels/deltanet_fused.py`
-# (verbatim from PR #152 — never edit; fix wrappers instead).
+# Adapts the PR #152 fused NKI kernel to vllm_neuron. The local kernel adds
+# resumable initial-state input and final-state output; see NOTICE.
 # ============================================================================
 
 
@@ -1730,14 +1731,14 @@ class Qwen38DeltaNetAttention(nn.Module):
 
 # ============================================================================
 # Section 5: Dense SwiGLU MLP
-# Mirrors vllm_neuron.model.llama3.LlamaMLP. Used for ALL 32 layers.
+# Used for all 64 layers.
 # ============================================================================
 
 
 class Qwen38MLP(nn.Module):
     """Dense SwiGLU MLP with NF.mlp.
 
-    hidden=2560, intermediate=9216, SiLU activation,
+    hidden=5120, intermediate=17408, SiLU activation,
     no bias. Pattern mirrors `vllm_neuron.model.llama3.LlamaMLP` minus
     the optional MLP-DP supergroup (skipped for Phase 3 simplicity;
     re-add in Phase 8 if needed).

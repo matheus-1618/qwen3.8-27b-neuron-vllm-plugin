@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+# Modified from: Modified from the attributed Qwen3.6 public example for Qwen3.8 configuration.
 """Qwen3.8-27B (hybrid GatedDeltaNet + GQA) configuration.
 
 Architecture summary (from Qwen/Qwen3.8-27B `config.json`):

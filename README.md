@@ -10,20 +10,18 @@ The plugin natively supports only GPT-OSS, Llama3 and Qwen3-VL — hybrid
 linear-attention models like this one require a custom model package. This repo
 is that package, plus the full replication pipeline and the optimization journey.
 
-## Measured results (TP=4, BF16, 1× Trainium2 chip, 96GB HBM)
+## Validated single-chip results (TP=4, BF16, 96 GiB HBM)
 
-| Metric | Initial port | Optimized | Gain |
-|---|---:|---:|---:|
-| Decode (single stream) | 20.7 tok/s | 31.3 tok/s | 1.5× |
-| TTFT (short prompt) | 6.96 s | 0.92 s | 7.5× |
-| Max context | 4,096 | 8,192 (needle-test verified) | 2× |
-| Concurrent requests | 1 (serialized) | 4 (correct per-sequence state) | 4× |
-| Aggregate throughput @4 | 22 tok/s | 43.6 tok/s | 2.2× |
-| TTFT p99 @ 4 users | 45 s | 7.0 s | 6.5× |
+| Metric | Result |
+|---|---:|
+| Max model length | 12,288 tokens |
+| Runtime KV capacity | 69,952 tokens (5.69× request length) |
+| Synthetic long request | 9,062 input tokens, HTTP 200 |
+| Four admitted long requests | 4/4 HTTP 200; server remained ready |
+| Peak HBM at C4 | 68.887 GiB/chip; 17.222 GiB/core |
+| Functional endpoint suite | 5/5 |
 
-Achieved through four phases: multi-bucket prefill → DeltaNet TP head-sharding →
-per-sequence recurrent state (continuous batching) → segmented prefill (8K context
-via an NKI kernel extended with initial-state input).
+C4 wall time was approximately four times C1 because segmented prefills were serialized. This is a capacity/stability result, not linear throughput scaling. Sanitized raw JSON and the exact configuration are in [`docs/LONG_CONTEXT_TRN2_3XL.md`](docs/LONG_CONTEXT_TRN2_3XL.md). Historical 4K optimization experiments remain under `docs/` and should not be mixed with this 12K configuration.
 
 ## Highlights / war stories (see `docs/`)
 
@@ -60,7 +58,7 @@ bash scripts/02_download_model.sh      # 52GB from HF (or your S3 mirror)
 # inside the container:
 bash scripts/03_install_plugin.sh && python3 scripts/make_local_model.py
 MODEL=/root/models/Qwen3.8-27B-text MAX_LEN=4096 SEG=4096 \
-  BUCKETS=512,1024,2048,4096 MNS=4 bash scripts/04_serve.sh
+  BUCKETS=512,1024,2048,4096 MNS=1 bash scripts/04_serve.sh
 ```
 
 ⚠️ Known issue: do NOT serve with a single `BUCKETS=4096` bucket — recompiles of
@@ -76,3 +74,9 @@ through an SSH tunnel. Never expose the port on a public IP.
 
 Apache-2.0 (same as vllm-neuron). This is an independent experimental port, not
 an official AWS or Alibaba artifact.
+
+## Single-chip 12K context update
+
+A BF16/TP4 configuration with `MAX_LEN=12288`, `MNS=4` and a workload-sized KV budget has now been validated on the trn2.3xlarge envelope. Four synthetic 9,062-token requests completed without OOM; peak HBM was 17.222 GiB per logical core. Prefills remain serialized, so this is a capacity/stability result rather than linear C4 scaling.
+
+See [`docs/LONG_CONTEXT_TRN2_3XL.md`](docs/LONG_CONTEXT_TRN2_3XL.md) for configuration, measurements, compilation caveats and the scope of any H100 comparison. See [`ACKNOWLEDGMENTS.md`](ACKNOWLEDGMENTS.md) for upstream references and attribution.

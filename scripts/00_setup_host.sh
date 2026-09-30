@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
 # [INSTÂNCIA] Fase 0: prepara o host AL2023 pelado da trn2.3xlarge.
 # Instala driver Neuron (dkms) + tools + docker. Idempotente.
 # Uso: bash 00_setup_host.sh

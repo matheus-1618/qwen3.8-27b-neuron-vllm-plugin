@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
 # [CONTAINER] Load test / stress com AIPerf (NVIDIA) — simula N usuários concorrentes.
 #
 # Diferente do 06_perf.sh (vllm bench serve, mais simples), aqui usamos o AIPerf,
@@ -24,10 +25,9 @@
 #
 # ⚠️ LEIA ANTES DE INTERPRETAR OS NÚMEROS:
 # O servidor precisa de `--max-num-seqs >= N` para atender N usuários EM PARALELO.
-# Com o default MNS=1, requests concorrentes apenas ENFILEIRAM — o teste mede fila,
-# não paralelismo (é justamente o que queremos demonstrar). E NÃO suba MNS nesta
-# instância sem antes ler o ROADMAP.md: além de OOM de HBM, o estado do DeltaNet é
-# indexado por posição de batch e corrompe silenciosamente com MNS>1.
+# Com MNS=1, concorrência de clientes mede fila. MNS=4 foi validado somente no
+# envelope 12K com KV_CAP=0.05 descrito em docs/LONG_CONTEXT_TRN2_3XL.md;
+# outros tamanhos/MNS exigem novo dimensionamento e validação de estado.
 set -euo pipefail
 
 URL="${BASE:-${URL:-http://localhost:8000}}"
@@ -43,8 +43,7 @@ VENV="${VENV:-/root/aiperf_venv}"
 if [ ! -x "$VENV/bin/aiperf" ]; then
   echo "[load] instalando aiperf em $VENV (venv isolada, python $(python3 -V 2>&1 | cut -d' ' -f2))"
   python3 -m venv "$VENV"
-  "$VENV/bin/pip" install -q --upgrade pip
-  "$VENV/bin/pip" install -q aiperf
+  "$VENV/bin/pip" install -q "aiperf==0.12.0"
 fi
 AIPERF="$VENV/bin/aiperf"
 echo "[load] aiperf $($AIPERF --version 2>&1 | tail -1)"
@@ -87,62 +86,78 @@ for c in $CONC; do
 done
 
 echo "================================ RESUMO ================================"
-python3 - "$OUTDIR" "$IN" "$OUT" <<'PY'
+python3 - "$OUTDIR" "$IN" "$OUT" "$CONC" "${REQS:-}" <<'PY_SUMMARY'
 import glob, json, os, sys
-root, IN, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
+root, IN, OUT, conc_raw, reqs_raw = sys.argv[1:]
+expected_concurrency = [int(value) for value in conc_raw.split()]
 
-def find_json(d):
-    for pat in ("**/profile_export_aiperf.json", "**/*aiperf*.json", "**/*.json"):
-        hits = glob.glob(os.path.join(d, pat), recursive=True)
-        hits = [h for h in hits if "input" not in os.path.basename(h).lower()]
-        if hits:
-            return hits[0]
+def find_json(directory):
+    for pattern in ("**/profile_export_aiperf.json", "**/*aiperf*.json", "**/*.json"):
+        hits = [path for path in glob.glob(os.path.join(directory, pattern), recursive=True)
+                if "input" not in os.path.basename(path).lower()]
+        if hits: return hits[0]
     return None
 
-def pick(d, *names):
-    """Procura métrica por nome em dicts aninhados."""
-    for n in names:
-        if n in d:
-            return d[n]
+def walk(value):
+    if isinstance(value, dict):
+        for key, child in value.items():
+            yield key, child
+            yield from walk(child)
+    elif isinstance(value, list):
+        for child in value: yield from walk(child)
+
+def metric(data, name, stat="avg"):
+    for key, value in walk(data):
+        if key == name:
+            return value.get(stat) if isinstance(value, dict) else value
     return None
 
-rows = []
-for art in sorted(glob.glob(os.path.join(root, f"c*_in{IN}_out{OUT}"))):
-    c = int(os.path.basename(art).split("_")[0][1:])
-    f = find_json(art)
-    if not f:
-        rows.append((c, None)); continue
-    try:
-        data = json.load(open(f))
-    except Exception:
-        rows.append((c, None)); continue
-    rows.append((c, data))
-
-if not any(d for _, d in rows):
-    print("(sem JSON de resultado — veja a saída de cada nível acima)")
-    raise SystemExit
-
-def get(d, metric, stat="avg"):
-    m = d.get(metric) if isinstance(d, dict) else None
-    if isinstance(m, dict):
-        return m.get(stat)
+def completed_count(data):
+    preferred = ("successful_requests", "completed_requests", "num_completed_requests", "completed", "request_count")
+    flat = list(walk(data))
+    for wanted in preferred:
+        for key, value in flat:
+            if key.lower() != wanted: continue
+            if isinstance(value, (int, float)): return int(value)
+            if isinstance(value, dict) and isinstance(value.get("avg"), (int, float)):
+                return int(value["avg"])
     return None
 
-hdr = (f"{'usuários':>8} | {'TTFT p50(ms)':>12} | {'TTFT p99(ms)':>12} | "
-       f"{'ITL avg(ms)':>11} | {'req/s':>7} | {'tok/s saída':>11}")
-print(hdr); print("-" * len(hdr))
-for c, d in rows:
-    if not d:
-        print(f"{c:>8} | {'?':>12} | {'?':>12} | {'?':>11} | {'?':>7} | {'?':>11}")
-        continue
-    recs = d.get("records", d)
-    ttft_p50 = get(recs, "time_to_first_token", "p50") or get(recs, "time_to_first_token", "avg")
-    ttft_p99 = get(recs, "time_to_first_token", "p99")
-    itl = get(recs, "inter_token_latency", "avg")
-    rps = get(recs, "request_throughput", "avg")
-    ops = get(recs, "output_token_throughput", "avg")
-    fmt = lambda v: f"{v:.1f}" if isinstance(v, (int, float)) else "?"
-    print(f"{c:>8} | {fmt(ttft_p50):>12} | {fmt(ttft_p99):>12} | {fmt(itl):>11} | "
-          f"{fmt(rps):>7} | {fmt(ops):>11}")
-print(f"\ninput={IN} tok, output={OUT} tok, streaming. Artefatos completos em {root}")
-PY
+rows=[]; errors=[]
+for concurrency in expected_concurrency:
+    directory=os.path.join(root, f"c{concurrency}_in{IN}_out{OUT}")
+    result=find_json(directory)
+    if not result:
+        errors.append(f"c={concurrency}: missing result JSON"); continue
+    try: data=json.load(open(result))
+    except Exception as error:
+        errors.append(f"c={concurrency}: invalid JSON {result}: {error}"); continue
+    expected=int(reqs_raw) if reqs_raw else concurrency*4
+    completed=completed_count(data)
+    if completed is None:
+        errors.append(f"c={concurrency}: artifact has no completed/successful request count"); continue
+    if completed != expected:
+        errors.append(f"c={concurrency}: completed {completed}, expected {expected}"); continue
+    ttft=metric(data,"time_to_first_token","p50") or metric(data,"time_to_first_token","avg")
+    p99=metric(data,"time_to_first_token","p99")
+    itl=metric(data,"inter_token_latency","avg")
+    rps=metric(data,"request_throughput","avg")
+    output_tps=metric(data,"output_token_throughput","avg")
+    required=(ttft,rps,output_tps)
+    if not all(isinstance(value,(int,float)) for value in required):
+        errors.append(f"c={concurrency}: required metrics missing from {result}"); continue
+    rows.append((concurrency,ttft,p99,itl,rps,output_tps,completed))
+
+if errors or len(rows) != len(expected_concurrency):
+    for error in errors: print("ERROR:",error,file=sys.stderr)
+    raise SystemExit(1)
+
+header=(f"{'users':>8} | {'TTFT p50(ms)':>12} | {'TTFT p99(ms)':>12} | "
+        f"{'ITL avg(ms)':>11} | {'req/s':>7} | {'output tok/s':>12} | {'ok':>4}")
+print(header); print("-"*len(header))
+fmt=lambda value: f"{value:.1f}" if isinstance(value,(int,float)) else "n/a"
+for c,ttft,p99,itl,rps,output_tps,completed in rows:
+    print(f"{c:>8} | {fmt(ttft):>12} | {fmt(p99):>12} | {fmt(itl):>11} | "
+          f"{fmt(rps):>7} | {fmt(output_tps):>12} | {completed:>4}")
+print(f"\ninput={IN}, output={OUT}, streaming; artifacts: {root}")
+PY_SUMMARY

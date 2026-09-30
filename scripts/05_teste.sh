@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
 # Fase 4: testes do endpoint (smoke + tool calling) e chat interativo.
-# Roda de qualquer lugar que alcance o endpoint (container, instância, ou laptop
-# com port-forward: scripts/ssh.sh -L 8000:localhost:8000 -N).
+# Roda de qualquer lugar que alcance o endpoint; para acesso remoto, crie um
+# túnel SSH local para 127.0.0.1:8000.
 #
 # Uso: bash 05_teste.sh              # suite de smoke + tool calling
 #      bash 05_teste.sh chat         # chat interativo (com tools de exemplo)

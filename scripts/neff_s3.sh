@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
 # [INSTÂNCIA] Sync do NEFF cache com S3 — reuso de compiles entre instâncias
 # efêmeras (spot/capacity block). NEFFs são keyed por hash do HLO + versão do
 # compilador: mesmo DLC + mesma config = cache hit, compile de ~25min vira ~0.
 #
-# Uso (na instância, via ssh.sh):
+# Uso (na instância ou numa sessão remota):
 #   bash neff_s3.sh push   # fim de sessão: sobe ~/neff_cache pro S3
 #   bash neff_s3.sh pull   # bootstrap: baixa o cache antes do primeiro serve
 #
-# Credencial: role da instância (trn2-qwen-ssm-role) tem policy escopada só
-# neste bucket. Bucket privado (public access block total).
+# Credencial: use uma instance role com acesso mínimo ao bucket privado.
+# Mantenha S3 Block Public Access habilitado.
 set -euo pipefail
 
 BUCKET="${NEFF_BUCKET:-YOUR_S3_BUCKET}"

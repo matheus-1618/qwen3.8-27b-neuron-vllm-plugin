@@ -1,0 +1,15 @@
+Qwen3.8-27B Neuron vLLM plugin
+
+The following files are modified from the public Qwen3.6 Trainium example by Armin Agha-Ebrahim at commit fc1af21a8620c97e6f0d67f48f89a8388a569808:
+  Source: https://github.com/arminagha1234/Armin-Neuron/tree/fc1af21a8620c97e6f0d67f48f89a8388a569808/qwen3.6-27b-trainium
+  Local files: serving_pkg/qwen38/{__init__.py,config.py,factory.py,model_bf16.py,weight_loaders_bf16.py,nki_kernels/__init__.py}
+  Modifications include Qwen3.8 configuration/checkpoint mappings, TP/state handling, vLLM-Neuron 0.21 registration and segmented-prefill integration. Each modified file carries an Apache-2.0 SPDX notice and a modification notice.
+
+serving_pkg/qwen38/nki_kernels/deltanet_fused.py retains its Amazon copyright and Apache-2.0 SPDX notice and is modified from:
+  aws-neuron/neuronx-distributed-inference pull request #152
+  https://github.com/aws-neuron/neuronx-distributed-inference/pull/152
+  PR head commit: c1795b0000d84c2aa2978b35adf4e6bcc69bc670
+  Source path: contrib/models/Qwen3.5-4B/src/nki_kernels/nki_deltanet_fused.py
+  Modifications: removed direct JIT decoration, added resumable initial-state input and final-state output, and integrated the kernel with the vLLM-Neuron wrapper.
+
+Repository-authored scripts, tests and documentation are licensed under Apache-2.0 where marked. Qwen model weights are not distributed and retain their upstream terms. This is an independent experimental project, not an official release of any referenced project or vendor.

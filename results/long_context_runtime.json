@@ -1,0 +1,17 @@
+{
+  "model": "qwen38",
+  "max_model_len": 12288,
+  "mns": 4,
+  "gmu": 0.9,
+  "kv_cap_fraction": 0.05,
+  "model_hbm_gib_per_core": 12.68,
+  "hbm_free_gib_before_kv_per_core": 11.32,
+  "kv_cache_tokens": 69952,
+  "max_concurrency": 5.69,
+  "engine_init_s": 1913.14,
+  "compile_s": 1912.2,
+  "worst_case_tokens": 49152,
+  "kv_headroom_tokens": 20800,
+  "ready": true,
+  "fatal_lines": []
+}

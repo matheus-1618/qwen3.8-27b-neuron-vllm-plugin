@@ -1,8 +1,8 @@
 # FASE 3 — Design: estado do DeltaNet por sequência (MNS>1)
 
-Anotado em 2026-09-06 após leitura do source do plugin (`refs/vllm_neuron/`).
-Objetivo: destravar `MNS=4` com correção — hoje o estado é indexado por posição
-no batch e o `copy_` faz broadcast (§7 do CONTEXT.md, itens 1-2).
+Anotado em 2026-09-06 após leitura do source do plugin público. Objetivo: destravar
+`MNS=4` com correção — o estado era indexado por posição no batch e `copy_`
+fazia broadcast (ver ROADMAP.md).
 
 ## Fatos levantados no source (com linha)
 
@@ -77,7 +77,7 @@ usados) → KV pra 4 sequências de 4096 cabe com folga.
 2. On-device: `MNS=4` + suite 5/5 por conexão; contagem 1..15 em 4 conexões
    PARALELAS com prompts diferentes (detector de estado cruzado).
 3. AIPerf `CONC="1 2 4"` — critério: ITL estável e tok/s agregado escalando
-   (hoje: plano em ~22 tok/s de 1→4).
+   (medir separadamente paralelismo real versus enfileiramento).
 
 ### Riscos
 

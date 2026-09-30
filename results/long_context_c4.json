@@ -1,0 +1,40 @@
+{
+  "model": "qwen38",
+  "requested_prompt_tokens": 9000,
+  "concurrency": 4,
+  "wall_s": 104.83359546004795,
+  "results": [
+    {
+      "index": 0,
+      "status": 200,
+      "elapsed_s": 104.38191194704268,
+      "prompt_tokens": 9062,
+      "completion_tokens": 54,
+      "finish_reason": "stop"
+    },
+    {
+      "index": 1,
+      "status": 200,
+      "elapsed_s": 104.82938969996758,
+      "prompt_tokens": 9062,
+      "completion_tokens": 64,
+      "finish_reason": "length"
+    },
+    {
+      "index": 2,
+      "status": 200,
+      "elapsed_s": 103.63117475097533,
+      "prompt_tokens": 9062,
+      "completion_tokens": 37,
+      "finish_reason": "stop"
+    },
+    {
+      "index": 3,
+      "status": 200,
+      "elapsed_s": 104.82851312402636,
+      "prompt_tokens": 9062,
+      "completion_tokens": 64,
+      "finish_reason": "length"
+    }
+  ]
+}

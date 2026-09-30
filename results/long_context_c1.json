@@ -1,0 +1,16 @@
+{
+  "model": "qwen38",
+  "requested_prompt_tokens": 9000,
+  "concurrency": 1,
+  "wall_s": 27.813907892035786,
+  "results": [
+    {
+      "index": 0,
+      "status": 200,
+      "elapsed_s": 27.812427953002043,
+      "prompt_tokens": 9062,
+      "completion_tokens": 54,
+      "finish_reason": "stop"
+    }
+  ]
+}
