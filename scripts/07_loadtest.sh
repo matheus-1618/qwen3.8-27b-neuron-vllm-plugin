@@ -26,7 +26,7 @@
 # ⚠️ LEIA ANTES DE INTERPRETAR OS NÚMEROS:
 # O servidor precisa de `--max-num-seqs >= N` para atender N usuários EM PARALELO.
 # Com MNS=1, concorrência de clientes mede fila. MNS=4 foi validado somente no
-# envelope 12K com KV_CAP=0.05 descrito em docs/LONG_CONTEXT_TRN2_3XL.md;
+# envelope 12K com KV_CAP=0.05 descrito em LEARNINGS.md;
 # outros tamanhos/MNS exigem novo dimensionamento e validação de estado.
 set -euo pipefail
 
